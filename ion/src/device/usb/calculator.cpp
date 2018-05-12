@@ -1,16 +1,16 @@
 #include "calculator.h"
-#include "../regs/regs.h"
-#include "../keyboard.h"
 #include <ion/usb.h>
-#include "../device.h"
+#include <ion/src/device/regs/regs.h>
+#include <ion/src/device/device.h>
+#include <ion/src/device/keyboard.h>
 
 namespace Ion {
 namespace USB {
 namespace Device {
 
 void Calculator::PollAndReset(bool exitWithKeyboard) {
-  char serialNumber[Ion::SerialNumberLength+1];
-  Ion::getSerialNumber(serialNumber);
+  char serialNumber[Ion::Device::SerialNumberLength+1];
+  Ion::Device::copySerialNumber(serialNumber);
   Calculator c(serialNumber);
 
   /* Leave DFU mode if the Back key is pressed, the calculator unplugged or the

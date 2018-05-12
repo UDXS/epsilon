@@ -14,6 +14,7 @@ extern "C" {
 #include "swd.h"
 #include "usb.h"
 #include "bench/bench.h"
+#include "base64.h"
 
 #define USE_SD_CARD 0
 
@@ -65,23 +66,22 @@ uint32_t Ion::random() {
   return result;
 }
 
-
-
-static inline char hex(uint8_t d) {
-  if (d > 9) {
-    return 'A'+d-10;
-  }
-  return '0'+d;
+void Ion::Device::copySerialNumber(char * buffer) {
+  const unsigned char * rawUniqueID = (const unsigned char *)0x1FFF7A10;
+  Base64::encode(rawUniqueID, 12, buffer);
+  buffer[SerialNumberLength] = 0;
 }
 
-void Ion::getSerialNumber(char * buffer) {
-  uint8_t * rawUniqueID = (uint8_t *)0x1FFF7A10;
-  for (int i=0; i<SerialNumberLength/2; i++) {
-    uint8_t d = *rawUniqueID++;
-    buffer[2*i] = hex(d >> 4);
-    buffer[2*i+1] = hex(d & 0xF);
+const char * Ion::serialNumber() {
+  static char serialNumber[Device::SerialNumberLength + 1] = {0};
+  if (serialNumber[0] == 0) {
+    Device::copySerialNumber(serialNumber);
   }
-  buffer[SerialNumberLength] = 0;
+  return serialNumber;
+}
+
+const char * Ion::fccId() {
+  return "2ALWP-N0100";
 }
 
 // Private Ion::Device methods
@@ -223,7 +223,13 @@ void initClocks() {
   RCC.PLLCFGR()->setPLLQ(4);
   RCC.PLLCFGR()->setPLLSRC(RCC::PLLCFGR::PLLSRC::HSE);
   // 96 MHz is too fast for APB1. Divide it by two to reach 48 MHz
-  RCC.CFGR()->setPPRE1(RCC::CFGR::AHBRatio::DivideBy2);
+  RCC.CFGR()->setPPRE1(RCC::CFGR::APBPrescaler::AHBDividedBy2);
+
+  /* If you want to considerably slow down the whole machine uniformely, which
+   * can be very useful to diagnose performance issues, just uncomment the line
+   * below. Note that even booting takes a few seconds, so don't be surprised
+   * if the screen is black for a short while upon booting. */
+  // RCC.CFGR()->setHPRE(RCC::CFGR::AHBPrescaler::SysClkDividedBy128);
 
   // Enable the PLL and wait for it to be ready
   RCC.CR()->setPLLON(true);

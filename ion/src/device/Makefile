@@ -15,16 +15,16 @@ objs += $(addprefix ion/src/shared/, \
 objs += $(addprefix ion/src/device/, \
   backlight.o \
   battery.o\
+  base64.o\
   console.o \
   device.o\
   display.o\
-  events_keyboard.o\
-  fcc_id.o\
+  events.o\
+  flash.o\
   keyboard.o\
   led.o\
   power.o\
   sd_card.o\
-  set_msp.o \
   swd.o \
   usb.o \
   wakeup.o \

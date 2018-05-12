@@ -1,5 +1,6 @@
 #include "bench.h"
 #include <ion.h>
+#include <kandinsky.h>
 #include "command_list.h"
 
 namespace Ion {
@@ -18,6 +19,7 @@ constexpr CommandHandler handles[] = {
   CommandHandler("PING", Command::Ping),
   CommandHandler("PRINT", Command::Print),
   CommandHandler("SUSPEND", Command::Suspend),
+  CommandHandler("VBLANK", Command::VBlank),
   CommandHandler(nullptr, nullptr)
 };
 
@@ -26,7 +28,9 @@ constexpr const CommandList sCommandList = CommandList(handles);
 constexpr int kMaxCommandLength = 255;
 
 void run() {
-  Ion::Display::pushRectUniform(KDRect(0,0,Ion::Display::Width,Ion::Display::Height), KDColorWhite);
+  KDContext * ctx = KDIonContext::sharedContext();
+  ctx->fillRect(KDRect(0,0,Ion::Display::Width,Ion::Display::Height), KDColorWhite);
+  ctx->drawString("BENCH", KDPoint((320-50)/2, (240-18)/2));
   char command[kMaxCommandLength];
   while (true) {
     Ion::Console::readLine(command, kMaxCommandLength);

@@ -75,7 +75,7 @@ VariableBoxController * AppsContainer::variableBoxController() {
 void AppsContainer::suspend(bool checkIfPowerKeyReleased) {
   resetShiftAlphaStatus();
 #if EPSILON_SOFTWARE_UPDATE_PROMPT
-  if (activeApp()->snapshot()!= onBoardingAppSnapshot() && GlobalPreferences::sharedGlobalPreferences()->showUpdatePopUp()) {
+  if (activeApp()->snapshot()!= onBoardingAppSnapshot() && activeApp()->snapshot() != hardwareTestAppSnapshot() && GlobalPreferences::sharedGlobalPreferences()->showUpdatePopUp()) {
     activeApp()->displayModalViewController(&m_updateController, 0.f, 0.f);
   }
 #endif
@@ -93,19 +93,7 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
 
   bool didProcessEvent = false;
 
-  if (event == Ion::Events::USBPlug) {
-    if (Ion::USB::isPlugged()) {
-      if (GlobalPreferences::sharedGlobalPreferences()->examMode() == GlobalPreferences::ExamMode::Activate) {
-        displayExamModePopUp(false);
-      } else {
-        Ion::USB::enable();
-      }
-      Ion::Backlight::setBrightness(Ion::Backlight::MaxBrightness);
-    } else {
-      Ion::USB::disable();
-    }
-    didProcessEvent = true;
-  } else if (event == Ion::Events::USBEnumeration) {
+  if (event == Ion::Events::USBEnumeration) {
     if (Ion::USB::isPlugged()) {
       App::Snapshot * activeSnapshot = (activeApp() == nullptr ? appSnapshotAtIndex(0) : activeApp()->snapshot());
       switchTo(usbConnectedAppSnapshot());
@@ -139,6 +127,19 @@ bool AppsContainer::dispatchEvent(Ion::Events::Event event) {
 }
 
 bool AppsContainer::processEvent(Ion::Events::Event event) {
+  if (event == Ion::Events::USBPlug) {
+    if (Ion::USB::isPlugged()) {
+      if (GlobalPreferences::sharedGlobalPreferences()->examMode() == GlobalPreferences::ExamMode::Activate) {
+        displayExamModePopUp(false);
+      } else {
+        Ion::USB::enable();
+      }
+      Ion::Backlight::setBrightness(GlobalPreferences::sharedGlobalPreferences()->brightnessLevel());
+    } else {
+      Ion::USB::disable();
+    }
+    return true;
+  }
   if (event == Ion::Events::Home || event == Ion::Events::Back) {
     switchTo(appSnapshotAtIndex(0));
     return true;
