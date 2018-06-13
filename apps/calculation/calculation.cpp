@@ -11,19 +11,14 @@ Calculation::Calculation() :
   m_exactOutputText(),
   m_approximateOutputText(),
   m_input(nullptr),
-  m_inputLayout(nullptr),
   m_exactOutput(nullptr),
-  m_exactOutputLayout(nullptr),
   m_approximateOutput(nullptr),
-  m_approximateOutputLayout(nullptr)
+  m_height(-1),
+  m_equalSign(EqualSign::Unknown)
 {
 }
 
 Calculation::~Calculation() {
-  if (m_inputLayout != nullptr) {
-    delete m_inputLayout;
-    m_inputLayout = nullptr;
-  }
   if (m_input != nullptr) {
     delete m_input;
     m_input = nullptr;
@@ -32,17 +27,9 @@ Calculation::~Calculation() {
     delete m_exactOutput;
     m_exactOutput = nullptr;
   }
-  if (m_exactOutputLayout != nullptr) {
-    delete m_exactOutputLayout;
-    m_exactOutputLayout = nullptr;
-  }
   if (m_approximateOutput != nullptr) {
     delete m_approximateOutput;
     m_approximateOutput = nullptr;
-  }
-  if (m_approximateOutputLayout != nullptr) {
-    delete m_approximateOutputLayout;
-    m_approximateOutputLayout = nullptr;
   }
 }
 
@@ -68,13 +55,34 @@ void Calculation::setContent(const char * c, Context * context, Expression * ans
   reset();
   m_input = Expression::parse(c);
   Expression::ReplaceSymbolWithExpression(&m_input, Symbol::SpecialSymbols::Ans, ansExpression);
-  /* We do not store directly the text enter by the user but its serialization
-   * to be able to compare it to the exact ouput text. */
+  /* We do not store directly the text enter by the user because we do not want
+   * to keep Ans symbol in the calculation store. */
   m_input->writeTextInBuffer(m_inputText, sizeof(m_inputText));
   m_exactOutput = Expression::ParseAndSimplify(m_inputText, *context);
   m_exactOutput->writeTextInBuffer(m_exactOutputText, sizeof(m_exactOutputText));
   m_approximateOutput = m_exactOutput->approximate<double>(*context);
   m_approximateOutput->writeTextInBuffer(m_approximateOutputText, sizeof(m_approximateOutputText));
+}
+
+KDCoordinate Calculation::height(Context * context) {
+  if (m_height < 0) {
+    ExpressionLayout * inputLayout = createInputLayout();
+    KDCoordinate inputHeight = inputLayout->size().height();
+    delete inputLayout;
+    Poincare::ExpressionLayout * approximateLayout = createApproximateOutputLayout(context);
+    KDCoordinate approximateOutputHeight = approximateLayout->size().height();
+    if (shouldOnlyDisplayApproximateOutput(context)) {
+      m_height = inputHeight+approximateOutputHeight;
+    } else {
+      Poincare::ExpressionLayout * exactLayout = createExactOutputLayout(context);
+      KDCoordinate exactOutputHeight = exactLayout->size().height();
+      KDCoordinate outputHeight = max(exactLayout->baseline(), approximateLayout->baseline()) + max(exactOutputHeight-exactLayout->baseline(), approximateOutputHeight-approximateLayout->baseline());
+      delete exactLayout;
+      m_height = inputHeight + outputHeight;
+    }
+    delete approximateLayout;
+  }
+  return m_height;
 }
 
 const char * Calculation::inputText() {
@@ -96,11 +104,11 @@ Expression * Calculation::input() {
   return m_input;
 }
 
-ExpressionLayout * Calculation::inputLayout() {
-  if (m_inputLayout == nullptr && input() != nullptr) {
-    m_inputLayout = input()->createLayout(PrintFloat::Mode::Decimal, Expression::ComplexFormat::Cartesian);
+ExpressionLayout * Calculation::createInputLayout() {
+  if (input() != nullptr) {
+    return input()->createLayout(PrintFloat::Mode::Decimal, Expression::ComplexFormat::Cartesian);
   }
-  return m_inputLayout;
+  return nullptr;
 }
 
 bool Calculation::isEmpty() {
@@ -122,42 +130,37 @@ void Calculation::tidy() {
     delete m_input;
   }
   m_input = nullptr;
-  if (m_inputLayout != nullptr) {
-    delete m_inputLayout;
-  }
-  m_inputLayout = nullptr;
   if (m_exactOutput != nullptr) {
     delete m_exactOutput;
   }
   m_exactOutput = nullptr;
-  if (m_exactOutputLayout != nullptr) {
-    delete m_exactOutputLayout;
-  }
-  m_exactOutputLayout = nullptr;
   if (m_approximateOutput != nullptr) {
     delete m_approximateOutput;
   }
   m_approximateOutput = nullptr;
-  if (m_approximateOutputLayout != nullptr) {
-    delete m_approximateOutputLayout;
-  }
-  m_approximateOutputLayout = nullptr;
+  m_height = -1;
+  m_equalSign = EqualSign::Unknown;
 }
 
 Expression * Calculation::exactOutput(Context * context) {
   if (m_exactOutput == nullptr) {
-    /* To ensure that the expression 'm_exactOutput' is a simplified, we
-     * call 'ParseAndSimplify'. */
-    m_exactOutput = Expression::ParseAndSimplify(m_exactOutputText, *context);
+    /* Because the angle unit might have changed, we do not simplify again. We
+     * thereby avoid turning cos(Pi/4) into sqrt(2)/2 and displaying
+     * 'sqrt(2)/2 = 0.999906' (which is totally wrong) instead of
+     * 'cos(pi/4) = 0.999906' (which is true in degree). */
+    m_exactOutput = Expression::parse(m_exactOutputText);
+    if (m_exactOutput == nullptr) {
+      m_exactOutput = new Undefined();
+    }
   }
   return m_exactOutput;
 }
 
-ExpressionLayout * Calculation::exactOutputLayout(Context * context) {
-  if (m_exactOutputLayout == nullptr && exactOutput(context) != nullptr) {
-    m_exactOutputLayout = exactOutput(context)->createLayout();
+ExpressionLayout * Calculation::createExactOutputLayout(Context * context) {
+  if (exactOutput(context) != nullptr) {
+    return exactOutput(context)->createLayout();
   }
-  return m_exactOutputLayout;
+  return nullptr;
 }
 
 Expression * Calculation::approximateOutput(Context * context) {
@@ -175,35 +178,29 @@ Expression * Calculation::approximateOutput(Context * context) {
   return m_approximateOutput;
 }
 
-ExpressionLayout * Calculation::approximateOutputLayout(Context * context) {
-  if (m_approximateOutputLayout == nullptr && approximateOutput(context) != nullptr) {
-    m_approximateOutputLayout = approximateOutput(context)->createLayout();
+ExpressionLayout * Calculation::createApproximateOutputLayout(Context * context) {
+  if (approximateOutput(context) != nullptr) {
+    return approximateOutput(context)->createLayout();
   }
-  return m_approximateOutputLayout;
+  return nullptr;
 }
 
-bool Calculation::shouldDisplayApproximateOutput(Context * context) {
+bool Calculation::shouldOnlyDisplayApproximateOutput(Context * context) {
   if (strcmp(m_exactOutputText, m_approximateOutputText) == 0) {
     return true;
   }
-  if (strcmp(m_exactOutputText, m_inputText) == 0) {
+  if (strcmp(m_exactOutputText, "undef") == 0) {
     return true;
   }
   return input()->isApproximate(*context);
 }
 
-bool Calculation::exactAndApproximateDisplayedOutputsAreEqual(Poincare::Context * context) {
-  char buffer[k_printedExpressionSize];
-  approximateOutput(context)->writeTextInBuffer(buffer, k_printedExpressionSize, Preferences::sharedPreferences()->numberOfSignificantDigits());
-  /* Warning: we cannot use directly the m_approximateOutputText but we have to
-   * re-serialize the approximateOutput because the number of stored
-   * significative numbers and the number of displayed significative numbers
-   * are not identical. (For example, 0.000025 might be displayed "0.00003"
-   * which requires in an approximative equal) */
-  Expression * approximateOutput = Expression::ParseAndSimplify(buffer, *context);
-  bool isEqual = approximateOutput->isIdenticalTo(exactOutput(context));
-  delete approximateOutput;
-  return isEqual;
+Calculation::EqualSign Calculation::exactAndApproximateDisplayedOutputsAreEqual(Poincare::Context * context) {
+  if (m_equalSign != EqualSign::Unknown) {
+    return m_equalSign;
+  }
+  m_equalSign = exactOutput(context)->isEqualToItsApproximationLayout(approximateOutput(context), k_printedExpressionSize, Preferences::sharedPreferences()->numberOfSignificantDigits(), *context) ? EqualSign::Equal : EqualSign::Approximation;
+  return m_equalSign;
 }
 
 }

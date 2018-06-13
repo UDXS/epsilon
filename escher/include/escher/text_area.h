@@ -8,23 +8,32 @@
 
 class TextArea : public TextInput {
 public:
-  TextArea(Responder * parentResponder, char * textBuffer = nullptr, size_t textBufferSize = 0, TextAreaDelegate * delegate = nullptr, KDText::FontSize fontSize = KDText::FontSize::Large,
-    KDColor textColor = KDColorBlack, KDColor backgroundColor = KDColorWhite);
+  TextArea(Responder * parentResponder, View * contentView, KDText::FontSize fontSize = KDText::FontSize::Large);
   void setDelegate(TextAreaDelegate * delegate) { m_delegate = delegate; }
   bool handleEvent(Ion::Events::Event event) override;
-  bool handleEventWithText(const char * text, bool indentation = false) override;
+  bool handleEventWithText(const char * text, bool indentation = false, bool forceCursorRightOfText = false) override;
   void setText(char * textBuffer, size_t textBufferSize);
-private:
+
+protected:
   int indentationBeforeCursor() const;
   bool insertTextWithIndentation(const char * textBuffer, int location);
   TextInputDelegate * delegate() override {
     return m_delegate;
   }
+
   class Text {
   public:
-    Text(char * buffer, size_t bufferSize);
-    void setText(char * buffer, size_t bufferSize);
+    Text(char * buffer, size_t bufferSize) :
+      m_buffer(buffer),
+      m_bufferSize(bufferSize)
+    {
+    }
+    void setText(char * buffer, size_t bufferSize) {
+      m_buffer = buffer;
+      m_bufferSize = bufferSize;
+    }
     const char * text() const { return const_cast<const char *>(m_buffer); }
+
     class Line {
     public:
       Line(const char * text);
@@ -66,7 +75,7 @@ private:
 
     void insertChar(char c, size_t index);
     char removeChar(size_t index);
-    int removeRemainingLine(size_t index, int direction);
+    size_t removeRemainingLine(size_t index, int direction);
     char operator[](size_t index) {
       assert(index < m_bufferSize);
       return m_buffer[index];
@@ -84,27 +93,32 @@ private:
 
   class ContentView : public TextInput::ContentView {
   public:
-    ContentView(char * textBuffer, size_t textBufferSize, KDText::FontSize size,
-      KDColor textColor, KDColor backgroundColor);
+    ContentView(KDText::FontSize fontSize) :
+      TextInput::ContentView(fontSize),
+      m_text(nullptr, 0)
+    {
+    }
     void drawRect(KDContext * ctx, KDRect rect) const override;
+    void drawStringAt(KDContext * ctx, int line, int column, const char * text, size_t length, KDColor textColor, KDColor backgroundColor) const;
+    virtual void drawLine(KDContext * ctx, int line, const char * text, size_t length, int fromColumn, int toColumn) const = 0;
+    virtual void clearRect(KDContext * ctx, KDRect rect) const = 0;
     KDSize minimalSizeForOptimalDisplay() const override;
     void setText(char * textBuffer, size_t textBufferSize);
-    const char * text() const override;
+    const char * text() const override { return m_text.text(); }
+    size_t editedTextLength() const override { return m_text.textLength(); }
     const Text * getText() const { return &m_text; }
-    size_t editedTextLength() const override {
-      return m_text.textLength();
-    }
     bool insertTextAtLocation(const char * text, int location) override;
     void moveCursorGeo(int deltaX, int deltaY);
     bool removeChar() override;
     bool removeEndOfLine() override;
     bool removeStartOfLine();
-  private:
+  protected:
     KDRect characterFrameAtIndex(size_t index) const override;
     Text m_text;
   };
-  const ContentView * nonEditableContentView() const override { return &m_contentView; }
-  ContentView m_contentView;
+
+  ContentView * contentView() { return static_cast<ContentView *>(TextInput::contentView()); }
+private:
   TextAreaDelegate * m_delegate;
 };
 

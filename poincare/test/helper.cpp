@@ -36,6 +36,7 @@ void translate_in_ASCII_chars(char * expression) {
       case Ion::Charset::Root: *c = 'R'; break;
       case Ion::Charset::SmallPi: *c = 'P'; break;
       case Ion::Charset::MultiplicationSign: *c = '*'; break;
+      case Ion::Charset::MiddleDot: *c = '*'; break;
       case Ion::Charset::Sto: *c = '>'; break;
     }
   }
@@ -104,6 +105,35 @@ void assert_parsed_expression_simplify_to(const char * expression, const char * 
 #endif
   assert(strcmp(buffer, simplifiedExpression) == 0);
   delete e;
+}
+
+void assert_parsed_expression_layout_serialize_to_self(const char * expressionLayout) {
+  Expression * e = parse_expression(expressionLayout);
+#if POINCARE_TESTS_PRINT_EXPRESSIONS
+  cout << "---- Serialize: " << expressionLayout << "----"  << endl;
+#endif
+  ExpressionLayout * el = e->createLayout();
+  int bufferSize = 255;
+  char buffer[bufferSize];
+  el->writeTextInBuffer(buffer, bufferSize);
+#if POINCARE_TESTS_PRINT_EXPRESSIONS
+  cout << "---- serialized to: " << buffer << " ----\n"  << endl;
+#endif
+  assert(strcmp(expressionLayout, buffer) == 0);
+  delete e;
+  delete el;
+}
+
+void assert_expression_layout_serialize_to(Poincare::ExpressionLayout * layout, const char * serialization) {
+  int bufferSize = 255;
+  char buffer[bufferSize];
+  layout->writeTextInBuffer(buffer, bufferSize);
+#if POINCARE_TESTS_PRINT_EXPRESSIONS
+  cout << "---- Serialize: " << serialization << "----"  << endl;
+  cout << "---- serialized to: " << buffer << " ----"  << endl;
+  cout << "----- compared to: " << serialization << " ----\n"  << endl;
+#endif
+  assert(strcmp(serialization, buffer) == 0);
 }
 
 template void assert_parsed_expression_evaluates_to<float>(char const*, Poincare::Complex<float>*, int, int, Poincare::Expression::AngleUnit);

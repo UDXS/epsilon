@@ -9,38 +9,64 @@ namespace Calculation {
 
 HistoryViewCell::HistoryViewCell(Responder * parentResponder) :
   Responder(parentResponder),
+  m_inputLayout(nullptr),
+  m_exactOutputLayout(nullptr),
+  m_approximateOutputLayout(nullptr),
   m_inputView(this),
   m_scrollableOutputView(this),
   m_selectedSubviewType(HistoryViewCell::SubviewType::Output)
 {
 }
 
-OutputExpressionsView * HistoryViewCell::outputView() {
-  return m_scrollableOutputView.outputView();
+HistoryViewCell::~HistoryViewCell() {
+  if (m_inputLayout != nullptr) {
+    delete m_inputLayout;
+    m_inputLayout = nullptr;
+  }
+  if (m_exactOutputLayout != nullptr) {
+    delete m_exactOutputLayout;
+    m_exactOutputLayout = nullptr;
+  }
+  if (m_approximateOutputLayout != nullptr) {
+    delete m_approximateOutputLayout;
+    m_approximateOutputLayout = nullptr;
+  }
+}
+
+Shared::ScrollableExactApproximateExpressionsView * HistoryViewCell::outputView() {
+  return &m_scrollableOutputView;
 
 }
 void HistoryViewCell::setEven(bool even) {
   EvenOddCell::setEven(even);
   m_inputView.setBackgroundColor(backgroundColor());
-  m_scrollableOutputView.outputView()->setEven(even);
+  m_scrollableOutputView.evenOddCell()->setEven(even);
 }
 
 void HistoryViewCell::setHighlighted(bool highlight) {
   m_highlighted = highlight;
   m_inputView.setBackgroundColor(backgroundColor());
-  m_scrollableOutputView.outputView()->setHighlighted(false);
+  m_scrollableOutputView.evenOddCell()->setHighlighted(false);
   if (isHighlighted()) {
     if (m_selectedSubviewType == SubviewType::Input) {
       m_inputView.setBackgroundColor(Palette::Select);
     } else {
-      m_scrollableOutputView.outputView()->setHighlighted(true);
+      m_scrollableOutputView.evenOddCell()->setHighlighted(true);
     }
   }
   reloadScroll();
 }
 
+Poincare::ExpressionLayout * HistoryViewCell::expressionLayout() const {
+  if (m_selectedSubviewType == SubviewType::Input) {
+    return m_inputLayout;
+  } else {
+    return m_scrollableOutputView.expressionLayout();
+  }
+}
+
 void HistoryViewCell::reloadCell() {
-  m_scrollableOutputView.outputView()->reloadCell();
+  m_scrollableOutputView.evenOddCell()->reloadCell();
   layoutSubviews();
   reloadScroll();
 }
@@ -51,7 +77,7 @@ void HistoryViewCell::reloadScroll() {
 }
 
 KDColor HistoryViewCell::backgroundColor() const {
-  KDColor background = m_even ? Palette::WallScreen : KDColorWhite;
+  KDColor background = m_even ? KDColorWhite : Palette::WallScreen;
   return background;
 }
 
@@ -83,15 +109,30 @@ void HistoryViewCell::layoutSubviews() {
 }
 
 void HistoryViewCell::setCalculation(Calculation * calculation) {
-  m_inputView.setExpression(calculation->inputLayout());
+  if (m_inputLayout) {
+    delete m_inputLayout;
+  }
+  m_inputLayout = calculation->createInputLayout();
+  m_inputView.setExpressionLayout(m_inputLayout);
   App * calculationApp = (App *)app();
-  /* Both output expressions have to be updated at the same time. The
-   * outputView points to deleted layouts and a call to
-   * outputView()->layoutSubviews() is going to fail. */
-  Poincare::ExpressionLayout * outputExpressions[2] = {calculation->approximateOutputLayout(calculationApp->localContext()), calculation->shouldDisplayApproximateOutput(calculationApp->localContext()) ? nullptr : calculation->exactOutputLayout(calculationApp->localContext())};
-  m_scrollableOutputView.outputView()->setExpressions(outputExpressions);
-  I18n::Message equalMessage = calculation->exactAndApproximateDisplayedOutputsAreEqual(calculationApp->localContext()) ? I18n::Message::Equal : I18n::Message::AlmostEqual;
-  m_scrollableOutputView.outputView()->setEqualMessage(equalMessage);
+  /* Both output expressions have to be updated at the same time. Otherwise,
+   * when updating one layout, if the second one still points to a deleted
+   * layout, calling to layoutSubviews() would fail. */
+  if (m_exactOutputLayout) {
+    delete m_exactOutputLayout;
+    m_exactOutputLayout = nullptr;
+  }
+  if (!calculation->shouldOnlyDisplayApproximateOutput(calculationApp->localContext())) {
+    m_exactOutputLayout = calculation->createExactOutputLayout(calculationApp->localContext());
+  }
+  if (m_approximateOutputLayout) {
+    delete m_approximateOutputLayout;
+  }
+  m_approximateOutputLayout = calculation->createApproximateOutputLayout(calculationApp->localContext());
+  Poincare::ExpressionLayout * outputExpressions[2] = {m_approximateOutputLayout, m_exactOutputLayout};
+  m_scrollableOutputView.setExpressions(outputExpressions);
+  I18n::Message equalMessage = calculation->exactAndApproximateDisplayedOutputsAreEqual(calculationApp->localContext()) == Calculation::EqualSign::Equal ? I18n::Message::Equal : I18n::Message::AlmostEqual;
+  m_scrollableOutputView.setEqualMessage(equalMessage);
 }
 
 void HistoryViewCell::didBecomeFirstResponder() {

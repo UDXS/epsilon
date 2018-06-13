@@ -3,24 +3,12 @@
 
 /* TextInput::ContentView */
 
-TextInput::ContentView::ContentView(KDText::FontSize size, KDColor textColor, KDColor backgroundColor) :
+TextInput::ContentView::ContentView(KDText::FontSize size) :
   View(),
   m_cursorView(),
   m_fontSize(size),
-  m_textColor(textColor),
-  m_backgroundColor(backgroundColor),
   m_cursorIndex(0)
 {
-}
-
-void TextInput::ContentView::setBackgroundColor(KDColor backgroundColor) {
-  m_backgroundColor = backgroundColor;
-  markRectAsDirty(bounds());
-}
-
-void TextInput::ContentView::setTextColor(KDColor textColor) {
-  m_textColor = textColor;
-  markRectAsDirty(bounds());
 }
 
 void TextInput::ContentView::setCursorLocation(int location) {
@@ -46,13 +34,17 @@ void TextInput::ContentView::layoutSubviews() {
   m_cursorView.setFrame(cursorRect());
 }
 
-void TextInput::ContentView::reloadRectFromCursorPosition(size_t index, bool lineBreak) {
+KDRect TextInput::ContentView::dirtyRectFromCursorPosition(size_t index, bool lineBreak) const {
   KDRect charRect = characterFrameAtIndex(index);
   KDRect dirtyRect = KDRect(charRect.x(), charRect.y(), bounds().width() - charRect.x(), charRect.height());
   if (lineBreak) {
       dirtyRect = dirtyRect.unionedWith(KDRect(0, charRect.bottom()+1, bounds().width(), bounds().height()-charRect.bottom()-1));
   }
-  markRectAsDirty(dirtyRect);
+  return dirtyRect;
+}
+
+void TextInput::ContentView::reloadRectFromCursorPosition(size_t index, bool lineBreak) {
+  markRectAsDirty(dirtyRectFromCursorPosition(index, lineBreak));
 }
 
 /* TextInput */
@@ -67,14 +59,6 @@ Toolbox * TextInput::toolbox() {
     return delegate()->toolboxForTextInput(this);
   }
   return nullptr;
-}
-
-void TextInput::setBackgroundColor(KDColor backgroundColor) {
-  contentView()->setBackgroundColor(backgroundColor);
-}
-
-void TextInput::setTextColor(KDColor textColor) {
-  contentView()->setTextColor(textColor);
 }
 
 bool TextInput::removeChar() {

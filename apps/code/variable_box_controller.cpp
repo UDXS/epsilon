@@ -62,6 +62,9 @@ void VariableBoxController::ContentViewController::viewWillAppear() {
 
 void VariableBoxController::ContentViewController::viewDidDisappear() {
   m_selectableTableView.deselectTable();
+  for (int i = 0; i < k_maxScriptNodesCount; i++) {
+    m_scriptNodes[i] = ScriptNode();
+  }
   ViewController::viewDidDisappear();
 }
 
@@ -87,7 +90,7 @@ bool VariableBoxController::ContentViewController::handleEvent(Ion::Events::Even
     ScriptNode selectedScriptNode = m_scriptNodes[m_selectableTableView.selectedRow()];
     insertTextInCaller(selectedScriptNode.name());
     if (selectedScriptNode.type() == ScriptNode::Type::Function) {
-      insertTextInCaller(ScriptNodeCell::k_parentheses);
+      insertTextInCaller(ScriptNodeCell::k_parenthesesWithEmpty);
     }
     m_selectableTableView.deselectTable();
     app()->dismissModalViewController();
@@ -115,8 +118,9 @@ void VariableBoxController::ContentViewController::willDisplayCellForIndex(Highl
 }
 
 void VariableBoxController::ContentViewController::insertTextInCaller(const char * text) {
-  char commandBuffer[strlen(text)+1];
-  Shared::ToolboxHelpers::TextToInsertForCommandText(text, commandBuffer);
+  int commandBufferMaxSize = strlen(text)+1;
+  char commandBuffer[commandBufferMaxSize];
+  Shared::ToolboxHelpers::TextToInsertForCommandText(text, commandBuffer, commandBufferMaxSize, true);
   m_textInputCaller->handleEventWithText(commandBuffer);
 }
 

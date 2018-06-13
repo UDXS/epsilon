@@ -20,9 +20,9 @@ Expression * SquareRoot::clone() const {
   return a;
 }
 
-static_assert('\x90' == Ion::Charset::Root, "Unicode error");
+static_assert('\x91' == Ion::Charset::Root, "Unicode error");
 int SquareRoot::writeTextInBuffer(char * buffer, int bufferSize, int numberOfSignificantDigits) const {
-  return LayoutEngine::writePrefixExpressionTextInBuffer(this, buffer, bufferSize, numberOfSignificantDigits, "\x90");
+  return LayoutEngine::writePrefixExpressionTextInBuffer(this, buffer, bufferSize, numberOfSignificantDigits, "\x91");
 }
 
 template<typename T>
@@ -52,7 +52,7 @@ Expression * SquareRoot::shallowReduce(Context& context, AngleUnit angleUnit) {
 ExpressionLayout * SquareRoot::privateCreateLayout(PrintFloat::Mode floatDisplayMode, ComplexFormat complexFormat) const {
   assert(floatDisplayMode != PrintFloat::Mode::Default);
   assert(complexFormat != ComplexFormat::Default);
-  return new NthRootLayout(operand(0)->createLayout(floatDisplayMode, complexFormat),nullptr);
+  return new NthRootLayout(operand(0)->createLayout(floatDisplayMode, complexFormat), false);
 }
 
 }

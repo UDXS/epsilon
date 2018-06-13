@@ -10,6 +10,11 @@ class CalculationStore;
 
 class Calculation {
 public:
+  enum class EqualSign : uint8_t {
+    Unknown,
+    Approximation,
+    Equal
+  };
   Calculation();
   ~Calculation(); // Delete expression and layout, if needed
   Calculation& operator=(const Calculation& other);
@@ -19,19 +24,20 @@ public:
   /* c.reset() is the equivalent of c = Calculation() without copy assingment. */
   void reset();
   void setContent(const char * c, Poincare::Context * context, Poincare::Expression * ansExpression);
+  KDCoordinate height(Poincare::Context * context);
   const char * inputText();
   const char * exactOutputText();
   const char * approximateOutputText();
   Poincare::Expression * input();
-  Poincare::ExpressionLayout * inputLayout();
+  Poincare::ExpressionLayout * createInputLayout();
   Poincare::Expression * approximateOutput(Poincare::Context * context);
   Poincare::Expression * exactOutput(Poincare::Context * context);
-  Poincare::ExpressionLayout * exactOutputLayout(Poincare::Context * context);
-  Poincare::ExpressionLayout * approximateOutputLayout(Poincare::Context * context);
+  Poincare::ExpressionLayout * createExactOutputLayout(Poincare::Context * context);
+  Poincare::ExpressionLayout * createApproximateOutputLayout(Poincare::Context * context);
   bool isEmpty();
   void tidy();
-  bool shouldDisplayApproximateOutput(Poincare::Context * context);
-  bool exactAndApproximateDisplayedOutputsAreEqual(Poincare::Context * context);
+  bool shouldOnlyDisplayApproximateOutput(Poincare::Context * context);
+  EqualSign exactAndApproximateDisplayedOutputsAreEqual(Poincare::Context * context);
   constexpr static int k_printedExpressionSize = 2*::TextField::maxBufferSize();
 private:
   /* Buffers holding text expressions have to be longer than the text written
@@ -41,11 +47,10 @@ private:
   char m_exactOutputText[k_printedExpressionSize];
   char m_approximateOutputText[k_printedExpressionSize];
   Poincare::Expression * m_input;
-  Poincare::ExpressionLayout * m_inputLayout;
   Poincare::Expression * m_exactOutput;
-  Poincare::ExpressionLayout * m_exactOutputLayout;
   Poincare::Expression * m_approximateOutput;
-  Poincare::ExpressionLayout * m_approximateOutputLayout;
+  KDCoordinate m_height;
+  EqualSign m_equalSign;
 };
 
 }

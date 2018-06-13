@@ -1,29 +1,34 @@
+#include <poincare/power.h>
+
+#include <poincare/addition.h>
+#include <poincare/arithmetic.h>
+#include <poincare/binomial_coefficient.h>
+#include <poincare/cosine.h>
+#include <poincare/division.h>
+#include <poincare/matrix.h>
+#include <poincare/matrix_inverse.h>
+#include <poincare/nth_root.h>
+#include <poincare/opposite.h>
+#include <poincare/parenthesis.h>
+#include <poincare/simplification_root.h>
+#include <poincare/sine.h>
+#include <poincare/square_root.h>
+#include <poincare/symbol.h>
+#include <poincare/subtraction.h>
+#include <poincare/undefined.h>
+
+#include "layout/horizontal_layout.h"
+#include "layout/vertical_offset_layout.h"
+
+#include <cmath>
+#include <math.h>
+#include <ion.h>
+
 extern "C" {
 #include <assert.h>
 #include <stdlib.h>
 }
-#include <cmath>
-#include <math.h>
-#include <ion.h>
-#include <poincare/binomial_coefficient.h>
-#include <poincare/matrix_inverse.h>
-#include <poincare/matrix.h>
-#include <poincare/power.h>
-#include <poincare/opposite.h>
-#include <poincare/parenthesis.h>
-#include <poincare/addition.h>
-#include <poincare/undefined.h>
-#include <poincare/square_root.h>
-#include <poincare/nth_root.h>
-#include <poincare/division.h>
-#include <poincare/matrix_inverse.h>
-#include <poincare/arithmetic.h>
-#include <poincare/symbol.h>
-#include <poincare/subtraction.h>
-#include <poincare/cosine.h>
-#include <poincare/sine.h>
-#include <poincare/simplification_root.h>
-#include "layout/baseline_relative_layout.h"
+
 
 namespace Poincare {
 
@@ -56,19 +61,51 @@ Expression::Sign Power::sign() const {
 }
 
 int Power::polynomialDegree(char symbolName) const {
-  Rational op0Deg = Rational(operand(0)->polynomialDegree(symbolName));
-  if (op0Deg.sign() == Sign::Negative) {
+  int deg = Expression::polynomialDegree(symbolName);
+  if (deg == 0) {
+    return deg;
+  }
+  int op0Deg = operand(0)->polynomialDegree(symbolName);
+  if (op0Deg < 0) {
     return -1;
   }
   if (operand(1)->type() == Type::Rational) {
-    op0Deg = Rational::Multiplication(op0Deg, *(static_cast<const Rational *>(operand(1))));
-    if (!op0Deg.denominator().isOne()) {
+    const Rational * r = static_cast<const Rational *>(operand(1));
+    if (!r->denominator().isOne() || r->sign() == Sign::Negative) {
       return -1;
     }
-    if (Integer::NaturalOrder(op0Deg.numerator(), Integer(Integer::k_maxExtractableInteger)) > 0) {
+    if (Integer::NaturalOrder(r->numerator(), Integer(Integer::k_maxExtractableInteger)) > 0) {
       return -1;
     }
-    return op0Deg.numerator().extractedInt();
+    op0Deg *= r->numerator().extractedInt();
+    return op0Deg;
+  }
+  return -1;
+}
+
+int Power::privateGetPolynomialCoefficients(char symbolName, Expression * coefficients[]) const {
+  int deg = polynomialDegree(symbolName);
+  if (deg <= 0) {
+    return Expression::privateGetPolynomialCoefficients(symbolName, coefficients);
+  }
+  /* Here we only consider the case x^4 as privateGetPolynomialCoefficients is
+   * supposed to be called after reducing the expression. */
+  if (operand(0)->type() == Type::Symbol && static_cast<const Symbol *>(operand(0))->name() == symbolName && operand(1)->type() == Type::Rational) {
+    const Rational * r = static_cast<const Rational *>(operand(1));
+    if (!r->denominator().isOne() || r->sign() == Sign::Negative) {
+      return -1;
+    }
+    if (Integer::NaturalOrder(r->numerator(), Integer(Integer::k_maxExtractableInteger)) > 0) {
+      return -1;
+    }
+    int n = r->numerator().extractedInt();
+    if (n <= k_maxPolynomialDegree) {
+      for (int i = 0; i < n; i++) {
+        coefficients[i] = new Rational(0);
+      }
+      coefficients[n] = new Rational(1);
+      return n;
+    }
   }
   return -1;
 }
@@ -110,7 +147,7 @@ template<typename T> Matrix * Power::computeOnMatrixAndComplex(const Matrix * m,
     return nullptr;
   }
   if (power < 0) {
-    Matrix * inverse = m->createInverse<T>();
+    Matrix * inverse = m->createApproximateInverse<T>();
     if (inverse == nullptr) {
       return nullptr;
     }
@@ -146,7 +183,14 @@ ExpressionLayout * Power::privateCreateLayout(PrintFloat::Mode floatDisplayMode,
   if (m_operands[1]->type() == Type::Parenthesis) {
     indiceOperand = m_operands[1]->operand(0);
   }
-  return new BaselineRelativeLayout(m_operands[0]->createLayout(floatDisplayMode, complexFormat),indiceOperand->createLayout(floatDisplayMode, complexFormat), BaselineRelativeLayout::Type::Superscript);
+  HorizontalLayout * result = new HorizontalLayout();
+  result->addOrMergeChildAtIndex(m_operands[0]->createLayout(floatDisplayMode, complexFormat), 0, false);
+  result->addChildAtIndex(new VerticalOffsetLayout(
+        indiceOperand->createLayout(floatDisplayMode, complexFormat),
+        VerticalOffsetLayout::Type::Superscript,
+        false),
+      result->numberOfChildren());
+  return result;
 }
 
 int Power::simplificationOrderSameType(const Expression * e, bool canBeInterrupted) const {
@@ -216,6 +260,7 @@ Expression * Power::shallowReduce(Context& context, AngleUnit angleUnit) {
   Complex<float> * op0 = static_cast<Complex<float> *>(operand(0)->approximate<float>(context, angleUnit));
   Complex<float> * op1 = static_cast<Complex<float> *>(operand(1)->approximate<float>(context, angleUnit));
   bool bothOperandsComplexes = op0->b() != 0 && op1->b() != 0;
+  bool nonComplexNegativeOperand0 = op0->b() == 0 && op0->a() < 0;
   delete op0;
   delete op1;
   if (bothOperandsComplexes) {
@@ -282,13 +327,24 @@ Expression * Power::shallowReduce(Context& context, AngleUnit angleUnit) {
     // p^q with p, q rationals
     if (!letPowerAtRoot && operand(1)->type() == Type::Rational) {
       Rational * exp = static_cast<Rational *>(editableOperand(1));
-      /* First, we check that the simplification does not involve too complex power
-       * of integers (ie 3^999) that would take too much time to compute. */
-      if (RationalExponentShouldNotBeReduced(exp)) {
+      if (RationalExponentShouldNotBeReduced(a, exp)) {
         return this;
       }
       return simplifyRationalRationalPower(this, a, exp, context, angleUnit);
     }
+  }
+  // (a)^(1/2) with a < 0 --> i*(-a)^(1/2)
+  if (!letPowerAtRoot && nonComplexNegativeOperand0 && operand(1)->type() == Type::Rational && static_cast<const Rational *>(operand(1))->numerator().isOne() && static_cast<const Rational *>(operand(1))->denominator().isTwo()) {
+    Expression * o0 = editableOperand(0);
+    Expression * m0 = new Multiplication(new Rational(-1), o0, false);
+    replaceOperand(o0, m0, false);
+    m0->shallowReduce(context, angleUnit);
+    Multiplication * m1 = new Multiplication();
+    replaceWith(m1, false);
+    m1->addOperand(new Symbol(Ion::Charset::IComplex));
+    m1->addOperand(this);
+    shallowReduce(context, angleUnit);
+    return m1->shallowReduce(context, angleUnit);
   }
   // e^(i*Pi*r) with r rational
   if (!letPowerAtRoot && isNthRootOfUnity()) {
@@ -349,7 +405,7 @@ Expression * Power::shallowReduce(Context& context, AngleUnit angleUnit) {
         Expression * factor = m->editableOperand(i);
         if (factor->sign() == Sign::Negative) {
           m->replaceOperand(factor, new Rational(-1), false);
-          factor->setSign(Sign::Positive, context, angleUnit);
+          factor = factor->setSign(Sign::Positive, context, angleUnit);
         } else {
           m->removeOperand(factor, false);
         }
@@ -368,9 +424,9 @@ Expression * Power::shallowReduce(Context& context, AngleUnit angleUnit) {
     Addition * a = static_cast<Addition *>(editableOperand(1));
     // Check is b is rational
     if (a->operand(0)->type() == Type::Rational) {
-      /* First, we check that the simplification does not involve too complex power
-       * of integers (ie 3^999) that would take too much time to compute. */
-      if (RationalExponentShouldNotBeReduced(static_cast<const Rational *>(a->operand(0)))) {
+      const Rational * rationalBase = static_cast<const Rational *>(operand(0));
+      const Rational * rationalIndex = static_cast<const Rational *>(a->operand(0));
+      if (RationalExponentShouldNotBeReduced(rationalBase, rationalIndex)) {
         return this;
       }
       Power * p1 = static_cast<Power *>(clone());
@@ -810,10 +866,28 @@ bool Power::isNthRootOfUnity() const {
   return false;
 }
 
-bool Power::RationalExponentShouldNotBeReduced(const Rational * r) {
+bool Power::RationalExponentShouldNotBeReduced(const Rational * b, const Rational * r) {
+  if (r->isMinusOne()) {
+    return false;
+  }
+  /* We check that the simplification does not involve too complex power of
+   * integers (ie 3^999, 120232323232^50) that would take too much time to
+   * compute:
+   *  - we cap the exponent at k_maxExactPowerMatrix
+   *  - we cap the resulting power at DBL_MAX
+   * The complexity of computing a power of rational is mainly due to computing
+   * the GCD of the resulting numerator and denominator. Euclide algorithm's
+   * complexity is apportionned to the number of decimal digits in the smallest
+   * integer. */
   Integer maxIntegerExponent = r->numerator();
   maxIntegerExponent.setNegative(false);
-  if (Integer::NaturalOrder(maxIntegerExponent, Integer(k_maxIntegerPower)) > 0) {
+  if (Integer::NaturalOrder(maxIntegerExponent, Integer(k_maxExactPowerMatrix)) > 0) {
+    return true;
+  }
+  double index = maxIntegerExponent.approximate<double>();
+  double powerNumerator = std::pow(std::fabs(b->numerator().approximate<double>()), index);
+  double powerDenominator = std::pow(std::fabs(b->denominator().approximate<double>()), index);
+  if (std::isnan(powerNumerator) || std::isnan(powerDenominator) || std::isinf(powerNumerator) || std::isinf(powerDenominator)) {
     return true;
   }
   return false;

@@ -96,10 +96,6 @@ Toolbox::Toolbox(Responder * parentResponder, const char * title) :
   m_selectableTableView.setShowsIndicators(false);
 }
 
-void Toolbox::setSender(Responder * sender) {
-  m_sender = sender;
-}
-
 bool Toolbox::handleEvent(Ion::Events::Event event) {
   return handleEventForRow(event, selectedRow());
 }
@@ -159,23 +155,6 @@ void Toolbox::willDisplayCellForIndex(HighlightCell * cell, int index) {
   myCell->setMessage(messageTree->label());
 }
 
-KDCoordinate Toolbox::cumulatedHeightFromIndex(int j) {
-  int result = 0;
-  for (int k = 0; k < j; k++) {
-    result += rowHeight(k);
-  }
-  return result;
-}
-
-int Toolbox::indexFromCumulatedHeight(KDCoordinate offsetY) {
-  int result = 0;
-  int j = 0;
-  while (result < offsetY && j < numberOfRows()) {
-    result += rowHeight(j++);
-  }
-  return (result < offsetY || offsetY == 0) ? j : j - 1;
-}
-
 int Toolbox::typeAtLocation(int i, int j) {
   MessageTree * messageTree = (MessageTree *)m_messageTreeModel->children(j);
   if (messageTree->numberOfChildren() == 0) {
@@ -233,8 +212,4 @@ bool Toolbox::returnToPreviousMenu() {
   m_stack.pop();
   app()->setFirstResponder(&m_listController);
   return true;
-}
-
-Responder * Toolbox::sender() {
-  return m_sender;
 }

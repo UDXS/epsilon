@@ -2,7 +2,9 @@
 #define CODE_EDITOR_VIEW_H
 
 #include <escher/view.h>
-#include <escher/text_area.h>
+#include "python_text_area.h"
+
+namespace Code {
 
 class EditorView : public Responder, public View, public ScrollViewDelegate {
 public:
@@ -10,15 +12,15 @@ public:
   void setTextAreaDelegate(TextAreaDelegate * delegate) {
     m_textArea.setDelegate(delegate);
   }
-  const char * text() const {
-    return m_textArea.text();
-  }
+  const char * text() const { return m_textArea.text(); }
   void setText(char * textBuffer, size_t textBufferSize) {
     m_textArea.setText(textBuffer, textBufferSize);
   }
   bool setCursorLocation(int location) {
     return m_textArea.setCursorLocation(location);
   }
+  void loadSyntaxHighlighter() { m_textArea.loadSyntaxHighlighter(); };
+  void unloadSyntaxHighlighter() { m_textArea.unloadSyntaxHighlighter(); };
   void scrollViewDidChangeOffset(ScrollViewDataSource * scrollViewDataSource) override;
   void didBecomeFirstResponder() override;
 private:
@@ -38,8 +40,10 @@ private:
     KDCoordinate m_offset;
   };
 
-  TextArea m_textArea;
+  PythonTextArea m_textArea;
   GutterView m_gutterView;
 };
+
+}
 
 #endif

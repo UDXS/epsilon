@@ -3,6 +3,8 @@
 #include "../apps_container.h"
 #include <assert.h>
 
+using namespace Shared;
+
 namespace Calculation {
 
 HistoryController::HistoryController(Responder * parentResponder, CalculationStore * calculationStore) :
@@ -47,8 +49,8 @@ bool HistoryController::handleEvent(Ion::Events::Event event) {
     if (subviewType == HistoryViewCell::SubviewType::Input) {
       editController->insertTextBody(calculation->inputText());
     } else {
-      OutputExpressionsView::SubviewType outputSubviewType = selectedCell->outputView()->selectedSubviewType();
-      if (outputSubviewType == OutputExpressionsView::SubviewType::ExactOutput) {
+      ScrollableExactApproximateExpressionsView::SubviewType outputSubviewType = selectedCell->outputView()->selectedSubviewType();
+      if (outputSubviewType == ScrollableExactApproximateExpressionsView::SubviewType::ExactOutput) {
         editController->insertTextBody(calculation->exactOutputText());
       } else {
         editController->insertTextBody(calculation->approximateOutputText());
@@ -92,23 +94,6 @@ bool HistoryController::handleEvent(Ion::Events::Event event) {
     EditExpressionController * editController = (EditExpressionController *)parentResponder();
     selectableTableView()->deselectTable();
     app()->setFirstResponder(editController);
-    return true;
-  }
-  if (event == Ion::Events::Copy) {
-    HistoryViewCell * selectedCell = (HistoryViewCell *)selectableTableView()->selectedCell();
-    HistoryViewCell::SubviewType subviewType = selectedCell->selectedSubviewType();
-    int focusRow = selectedRow();
-    Calculation * calculation = m_calculationStore->calculationAtIndex(focusRow);
-    if (subviewType == HistoryViewCell::SubviewType::Input) {
-      Clipboard::sharedClipboard()->store(calculation->inputText());
-    } else {
-      OutputExpressionsView::SubviewType outputSubviewType = selectedCell->outputView()->selectedSubviewType();
-      if (outputSubviewType == OutputExpressionsView::SubviewType::ExactOutput) {
-        Clipboard::sharedClipboard()->store(calculation->exactOutputText());
-      } else {
-        Clipboard::sharedClipboard()->store(calculation->approximateOutputText());
-      }
-    }
     return true;
   }
   return false;
@@ -158,34 +143,8 @@ KDCoordinate HistoryController::rowHeight(int j) {
     return 0;
   }
   Calculation * calculation = m_calculationStore->calculationAtIndex(j);
-  KDCoordinate inputHeight = calculation->inputLayout()->size().height();
   App * calculationApp = (App *)app();
-  Poincare::ExpressionLayout * approximateLayout = calculation->approximateOutputLayout(calculationApp->localContext());
-  KDCoordinate approximateOutputHeight = approximateLayout->size().height();
-  if (calculation->shouldDisplayApproximateOutput(calculationApp->localContext())) {
-    return inputHeight + approximateOutputHeight + 3*HistoryViewCell::k_digitVerticalMargin;
-  }
-  Poincare::ExpressionLayout * exactLayout = calculation->exactOutputLayout(calculationApp->localContext());
-  KDCoordinate exactOutputHeight = exactLayout->size().height();
-  KDCoordinate outputHeight = max(exactLayout->baseline(), approximateLayout->baseline()) + max(exactOutputHeight-exactLayout->baseline(), approximateOutputHeight-approximateLayout->baseline());
-  return inputHeight + outputHeight + 3*HistoryViewCell::k_digitVerticalMargin;
-}
-
-KDCoordinate HistoryController::cumulatedHeightFromIndex(int j) {
-  int result = 0;
-  for (int k = 0; k < j; k++) {
-    result += rowHeight(k);
-  }
-  return result;
-}
-
-int HistoryController::indexFromCumulatedHeight(KDCoordinate offsetY) {
-  int result = 0;
-  int j = 0;
-  while (result < offsetY && j < numberOfRows()) {
-    result += rowHeight(j++);
-  }
-  return (result < offsetY || offsetY == 0) ? j : j - 1;
+  return calculation->height(calculationApp->localContext()) + 3*HistoryViewCell::k_digitVerticalMargin;
 }
 
 int HistoryController::typeAtLocation(int i, int j) {

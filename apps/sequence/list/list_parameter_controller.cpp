@@ -61,8 +61,8 @@ bool ListParameterController::handleEvent(Ion::Events::Event event) {
 #else
     if (selectedRowIndex == 2+hasAdditionalRow) {
 #endif
-      if (m_functionStore->numberOfFunctions() > 0) {
-        m_functionStore->removeFunction(m_function);
+      if (m_functionStore->numberOfModels() > 0) {
+        m_functionStore->removeModel(m_function);
         static_cast<App *>(app())->localContext()->resetCache();
         StackViewController * stack = (StackViewController *)(parentResponder());
         stack->pop();
@@ -103,7 +103,7 @@ void ListParameterController::willDisplayCellForIndex(HighlightCell * cell, int 
   cell->setHighlighted(index == selectedRow()); // See FIXME in SelectableTableView::reloadData()
   Shared::ListParameterController::willDisplayCellForIndex(cell, index);
   if (cell == &m_typeCell && m_sequence != nullptr) {
-    m_typeCell.setExpression(m_sequence->definitionName());
+    m_typeCell.setExpressionLayout(m_sequence->definitionName());
   }
   if (cell == &m_initialRankCell && m_sequence != nullptr) {
     MessageTableCellWithEditableText * myCell = (MessageTableCellWithEditableText *) cell;
@@ -121,15 +121,18 @@ bool ListParameterController::textFieldShouldFinishEditing(TextField * textField
 }
 
 bool ListParameterController::textFieldDidFinishEditing(TextField * textField, const char * text, Ion::Events::Event event) {
+  static float maxFirstIndex = std::pow(10.0f, Sequence::k_initialRankNumberOfDigits) - 1.0f;
+  /* -1 to take into account a double recursive sequence, which has
+   * SecondIndex = FirstIndex + 1 */
   AppsContainer * appsContainer = ((TextFieldDelegateApp *)app())->container();
   Context * globalContext = appsContainer->globalContext();
-  double floatBody = Expression::approximateToScalar<double>(text, *globalContext);
+  float floatBody = Expression::approximateToScalar<float>(text, *globalContext);
   int index = std::round(floatBody);
   if (std::isnan(floatBody) || std::isinf(floatBody)) {
     app()->displayWarning(I18n::Message::UndefinedValue);
     return false;
   }
-  if (index < 0) {
+  if (index < 0  || floatBody >= maxFirstIndex) {
     app()->displayWarning(I18n::Message::ForbiddenValue);
     return false;
   }

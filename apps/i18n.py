@@ -7,12 +7,14 @@ import argparse
 import io
 
 ion_special_characters = {
+    u'Δ': "Ion::Charset::CapitalDelta",
     u'Σ': "Ion::Charset::CapitalSigma",
     u'λ': "Ion::Charset::SmallLambda",
     u'μ': "Ion::Charset::SmallMu",
     u'σ': "Ion::Charset::SmallSigma",
     u'≤': "Ion::Charset::LessEqual",
-    u'≈': "Ion::Charset::AlmostEqual"
+    u'≈': "Ion::Charset::AlmostEqual",
+    u'•': "Ion::Charset::Empty"
 }
 
 def ion_char(i18n_letter):

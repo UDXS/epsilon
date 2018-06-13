@@ -2,8 +2,10 @@
 #include "list_controller.h"
 #include "../app.h"
 #include <assert.h>
-#include "../../../poincare/src/layout/baseline_relative_layout.h"
-#include "../../../poincare/src/layout/string_layout.h"
+#include <poincare/layout_engine.h>
+#include "../../../poincare/src/layout/char_layout.h"
+#include "../../../poincare/src/layout/horizontal_layout.h"
+#include "../../../poincare/src/layout/vertical_offset_layout.h"
 
 using namespace Poincare;
 
@@ -80,9 +82,10 @@ bool TypeParameterController::handleEvent(Ion::Events::Event event) {
       stack->pop();
       return true;
     }
-    Sequence * newSequence = m_sequenceStore->addEmptyFunction();
+    Sequence * newSequence = static_cast<Sequence *>(m_sequenceStore->addEmptyModel());
     newSequence->setType((Sequence::Type)selectedRow());
     app()->dismissModalViewController();
+    m_listController->editExpression(newSequence, 0, Ion::Events::OK);
     return true;
   }
   if (event == Ion::Events::Left && m_sequence) {
@@ -126,9 +129,12 @@ void TypeParameterController::willDisplayCellAtLocation(HighlightCell * cell, in
     delete m_expressionLayouts[j];
     m_expressionLayouts[j] = nullptr;
   }
-  m_expressionLayouts[j] = new BaselineRelativeLayout(new StringLayout(nextName, 1, size), new StringLayout(subscripts[j], strlen(subscripts[j]), KDText::FontSize::Small), BaselineRelativeLayout::Type::Subscript);
+  m_expressionLayouts[j] = new HorizontalLayout(
+        new CharLayout(nextName[0], size),
+        new VerticalOffsetLayout(LayoutEngine::createStringLayout(subscripts[j], strlen(subscripts[j]), KDText::FontSize::Small), VerticalOffsetLayout::Type::Subscript, false),
+        false);
   ExpressionTableCellWithPointer * myCell = (ExpressionTableCellWithPointer *)cell;
-  myCell->setExpression(m_expressionLayouts[j]);
+  myCell->setExpressionLayout(m_expressionLayouts[j]);
 }
 
 void TypeParameterController::setSequence(Sequence * sequence) {

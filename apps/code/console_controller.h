@@ -34,6 +34,8 @@ public:
   void autoImport();
   void autoImportScript(Script script, bool force = false);
   void runAndPrintForCommand(const char * command);
+  bool inputRunLoopActive() { return m_inputRunLoopActive; }
+  void askInputRunLoopTermination() { m_inputRunLoopActive = false; }
 
   // ViewController
   View * view() override { return &m_selectableTableView; }
@@ -59,7 +61,7 @@ public:
   bool textFieldShouldFinishEditing(TextField * textField, Ion::Events::Event event) override;
   bool textFieldDidReceiveEvent(TextField * textField, Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(TextField * textField, const char * text, Ion::Events::Event event) override;
-  bool textFieldDidAbortEditing(TextField * textField, const char * text) override;
+  bool textFieldDidAbortEditing(TextField * textField) override;
   Toolbox * toolboxForTextInput(TextInput * textInput) override;
 
   // MicroPython::ExecutionEnvironment
@@ -76,8 +78,6 @@ private:
   static constexpr const char * k_importCommand1 = "from ";
   static constexpr const char * k_importCommand2 = " import *";
   static constexpr size_t k_maxImportCommandSize = 5 + 9 + TextField::maxBufferSize(); // strlen(k_importCommand1) + strlen(k_importCommand2) + TextField::maxBufferSize()
-  bool inputRunLoopActive() { return m_inputRunLoopActive; }
-  void askInputRunLoopTermination() { m_inputRunLoopActive = false; }
   static constexpr int LineCellType = 0;
   static constexpr int EditCellType = 1;
   static constexpr int k_numberOfLineCells = 15; // May change depending on the screen height
@@ -88,7 +88,6 @@ private:
   void emptyOutputAccumulationBuffer();
   size_t firstNewLineCharIndex(const char * text, size_t length);
   StackViewController * stackViewController();
-  bool copyCurrentLineToClipboard();
   int m_rowHeight;
   bool m_importScriptsWhenViewAppears;
   ConsoleStore m_consoleStore;

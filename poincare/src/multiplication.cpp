@@ -1,26 +1,22 @@
+#include <poincare/multiplication.h>
+#include <poincare/addition.h>
+#include <poincare/arithmetic.h>
+#include <poincare/division.h>
+#include <poincare/matrix.h>
+#include <poincare/opposite.h>
+#include <poincare/parenthesis.h>
+#include <poincare/power.h>
+#include <poincare/rational.h>
+#include <poincare/simplification_root.h>
+#include <poincare/subtraction.h>
+#include <poincare/tangent.h>
+#include <poincare/undefined.h>
+#include <cmath>
+#include <ion.h>
 extern "C" {
 #include <assert.h>
 #include <stdlib.h>
 }
-#include <cmath>
-
-#include <poincare/multiplication.h>
-#include <poincare/rational.h>
-#include <poincare/addition.h>
-#include <poincare/power.h>
-#include <poincare/opposite.h>
-#include <poincare/undefined.h>
-#include <poincare/parenthesis.h>
-#include <poincare/subtraction.h>
-#include <poincare/tangent.h>
-#include <poincare/division.h>
-#include <poincare/arithmetic.h>
-#include <poincare/simplification_root.h>
-#include <poincare/matrix.h>
-#include <ion.h>
-#include "layout/string_layout.h"
-#include "layout/horizontal_layout.h"
-#include "layout/parenthesis_layout.h"
 
 namespace Poincare {
 
@@ -45,6 +41,43 @@ int Multiplication::polynomialDegree(char symbolName) const {
     degree += d;
   }
   return degree;
+}
+
+int Multiplication::privateGetPolynomialCoefficients(char symbolName, Expression * coefficients[]) const {
+  int deg = polynomialDegree(symbolName);
+  if (deg < 0 || deg > k_maxPolynomialDegree) {
+    return -1;
+  }
+  // Initialization of coefficients
+  for (int i = 1; i <= deg; i++) {
+    coefficients[i] = new Rational(0);
+  }
+  coefficients[0] = new Rational(1);
+
+  Expression * intermediateCoefficients[k_maxNumberOfPolynomialCoefficients];
+  // Let's note result = a(0)+a(1)*X+a(2)*X^2+a(3)*x^3+..
+  for (int i = 0; i < numberOfOperands(); i++) {
+    // operand(i) = b(0)+b(1)*X+b(2)*X^2+b(3)*x^3+...
+    int degI = operand(i)->privateGetPolynomialCoefficients(symbolName, intermediateCoefficients);
+    assert(degI <= k_maxPolynomialDegree);
+    for (int j = deg; j > 0; j--) {
+      // new coefficients[j] = b(0)*a(j)+b(1)*a(j-1)+b(2)*a(j-2)+...
+      Addition * a = new Addition();
+      int jbis = j > degI ? degI : j;
+      for (int l = 0; l <= jbis ; l++) {
+        // Always copy the a and b coefficients are they are used multiple times
+        a->addOperand(new Multiplication(intermediateCoefficients[l], coefficients[j-l], true));
+      }
+      /* a(j) and b(j) are used only to compute coefficient at rank >= j, we
+       * can delete them as we compute new coefficient by decreasing ranks. */
+      delete coefficients[j];
+      if (j <= degI) { delete intermediateCoefficients[j]; };
+      coefficients[j] = a;
+    }
+    // new coefficients[0] = a(0)*b(0)
+    coefficients[0] = new Multiplication(coefficients[0], intermediateCoefficients[0], false);
+  }
+  return deg;
 }
 
 bool Multiplication::needParenthesisWithParent(const Expression * e) const {

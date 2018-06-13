@@ -1,4 +1,5 @@
 #include "menu_controller.h"
+#include "app.h"
 #include "../i18n.h"
 #include "../apps_container.h"
 #include <assert.h>
@@ -7,15 +8,11 @@
 
 namespace Code {
 
-MenuController::MenuController(Responder * parentResponder, ScriptStore * scriptStore, ButtonRowController * footer
-#if EPSILON_GETOPT
-      , bool lockOnConsole
-#endif
-    ) :
+MenuController::MenuController(Responder * parentResponder, ScriptStore * scriptStore, ButtonRowController * footer) :
   ViewController(parentResponder),
   ButtonRowDelegate(nullptr, footer),
   m_scriptStore(scriptStore),
-  m_addNewScriptCell(I18n::Message::AddScript),
+  m_addNewScriptCell(),
   m_consoleButton(this, I18n::Message::Console, Invocation([](void * context, void * sender) {
     MenuController * menu = (MenuController *)context;
     if (menu->consoleController()->loadPythonEnvironment()) {
@@ -25,11 +22,6 @@ MenuController::MenuController(Responder * parentResponder, ScriptStore * script
     //TODO: Pop up warning message: not enough space to load Python
   }, this), KDText::FontSize::Large),
   m_selectableTableView(this, this, this, this),
-  m_consoleController(parentResponder, m_scriptStore
-#if EPSILON_GETOPT
-      , lockOnConsole
-#endif
-      ),
   m_scriptParameterController(nullptr, I18n::Message::ScriptOptions, this),
   m_editorController(this),
   m_reloadConsoleWhenBecomingFirstResponder(false),
@@ -37,6 +29,7 @@ MenuController::MenuController(Responder * parentResponder, ScriptStore * script
 {
   m_selectableTableView.setMargins(0);
   m_selectableTableView.setShowsIndicators(false);
+  m_addNewScriptCell.setMessage(I18n::Message::AddScript);
   for (int i = 0; i < k_maxNumberOfDisplayableScriptCells; i++) {
     m_scriptCells[i].setParentResponder(&m_selectableTableView);
     m_scriptCells[i].editableTextCell()->textField()->setDelegate(this);
@@ -44,6 +37,10 @@ MenuController::MenuController(Responder * parentResponder, ScriptStore * script
     m_scriptCells[i].editableTextCell()->textField()->setAlignment(0.0f, 0.5f);
     m_scriptCells[i].editableTextCell()->setMargins(0, 0, 0, Metric::HistoryHorizontalMargin);
   }
+}
+
+ConsoleController * MenuController::consoleController() {
+  return static_cast<App *>(app())->consoleController();
 }
 
 StackViewController * MenuController::stackViewController() {
@@ -57,7 +54,7 @@ void MenuController::willExitResponderChain(Responder * nextFirstResponder) {
     TextField * tf = static_cast<EvenOddEditableTextCell *>(m_selectableTableView.selectedCell())->editableTextCell()->textField();
     if (tf->isEditing()) {
       tf->setEditing(false);
-      textFieldDidAbortEditing(tf, tf->text());
+      textFieldDidAbortEditing(tf);
     }
   }
 }
@@ -145,19 +142,19 @@ void MenuController::deleteScript(Script script) {
 }
 
 void MenuController::reloadConsole() {
-  m_consoleController.unloadPythonEnvironment();
+  consoleController()->unloadPythonEnvironment();
   m_reloadConsoleWhenBecomingFirstResponder = false;
 }
 
 void MenuController::loadPythonIfNeeded() {
-  m_consoleController.loadPythonEnvironment(false);
+  consoleController()->loadPythonEnvironment(false);
 }
 
 void MenuController::openConsoleWithScript(Script script) {
   reloadConsole();
-  if (m_consoleController.loadPythonEnvironment(false)) {
-    stackViewController()->push(&m_consoleController);
-    m_consoleController.autoImportScript(script, true);
+  if (consoleController()->loadPythonEnvironment(false)) {
+    stackViewController()->push(consoleController());
+    consoleController()->autoImportScript(script, true);
   }
   m_reloadConsoleWhenBecomingFirstResponder = true;
 }
@@ -345,8 +342,8 @@ bool MenuController::textFieldDidFinishEditing(TextField * textField, const char
   return false;
 }
 
-bool MenuController::textFieldDidAbortEditing(TextField * textField, const char * text) {
-  if (strlen(text) <= strlen(ScriptStore::k_scriptExtension)) {
+bool MenuController::textFieldDidAbortEditing(TextField * textField) {
+  if (strlen(textField->text()) <= strlen(ScriptStore::k_scriptExtension)) {
     // The previous text was an empty name. Use a numbered default script name.
     char numberedDefaultName[k_defaultScriptNameMaxSize];
     numberedDefaultScriptName(numberedDefaultName);

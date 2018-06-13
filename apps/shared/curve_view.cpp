@@ -10,13 +10,14 @@ using namespace Poincare;
 namespace Shared {
 
 CurveView::CurveView(CurveViewRange * curveViewRange, CurveViewCursor * curveViewCursor, BannerView * bannerView,
-    View * cursorView, View * okView) :
+    View * cursorView, View * okView, bool displayBanner) :
   View(),
   m_bannerView(bannerView),
   m_curveViewCursor(curveViewCursor),
   m_curveViewRange(curveViewRange),
   m_cursorView(cursorView),
   m_okView(okView),
+  m_forceOkDisplay(false),
   m_mainViewSelected(false),
   m_drawnRangeVersion(0)
 {
@@ -27,7 +28,7 @@ void CurveView::reload() {
   if (m_drawnRangeVersion != rangeVersion) {
     // FIXME: This should also be called if the *curve* changed
     m_drawnRangeVersion = rangeVersion;
-    KDCoordinate bannerHeight = m_bannerView != nullptr ? m_bannerView->bounds().height() : 0;
+    KDCoordinate bannerHeight = (m_bannerView != nullptr) ? m_bannerView->bounds().height() : 0;
     markRectAsDirty(KDRect(0, 0, bounds().width(), bounds().height() - bannerHeight));
     if (label(Axis::Horizontal, 0) != nullptr) {
       computeLabels(Axis::Horizontal);
@@ -143,10 +144,12 @@ void CurveView::computeLabels(Axis axis) {
   }
 }
 
-void CurveView::drawLabels(KDContext * ctx, KDRect rect, Axis axis, bool shiftOrigin) const {
+void CurveView::drawLabels(KDContext * ctx, KDRect rect, Axis axis, bool shiftOrigin, bool graduationOnly, bool fixCoordinate, KDCoordinate fixedCoordinate) const {
   float step = gridUnit(axis);
   float start = 2.0f*step*(std::ceil(min(axis)/(2.0f*step)));
   float end = max(axis);
+  float verticalCoordinate = fixCoordinate ? fixedCoordinate : std::round(floatToPixel(Axis::Vertical, 0.0f));
+  float horizontalCoordinate = fixCoordinate ? fixedCoordinate : std::round(floatToPixel(Axis::Horizontal, 0.0f));
   int i = 0;
   for (float x = start; x < end; x += 2.0f*step) {
     /* When |start| >> step, start + step = start. In that case, quit the
@@ -154,18 +157,22 @@ void CurveView::drawLabels(KDContext * ctx, KDRect rect, Axis axis, bool shiftOr
     if (x == x-step || x == x+step) {
       return;
     }
-    KDSize textSize = KDText::stringSize(label(axis, i), KDText::FontSize::Small);
-    KDPoint origin(std::round(floatToPixel(Axis::Horizontal, x)) - textSize.width()/2, std::round(floatToPixel(Axis::Vertical, 0.0f))  + k_labelMargin);
-    KDRect graduation(std::round(floatToPixel(Axis::Horizontal, x)), std::round(floatToPixel(Axis::Vertical, 0.0f)) -(k_labelGraduationLength-2)/2, 1, k_labelGraduationLength);
+    KDRect graduation(std::round(floatToPixel(Axis::Horizontal, x)), verticalCoordinate -(k_labelGraduationLength-2)/2, 1, k_labelGraduationLength);
     if (axis == Axis::Vertical) {
-      origin = KDPoint(std::round(floatToPixel(Axis::Horizontal, 0.0f)) + k_labelMargin, std::round(floatToPixel(Axis::Vertical, x)) - textSize.height()/2);
-      graduation = KDRect(std::round(floatToPixel(Axis::Horizontal, 0.0f))-(k_labelGraduationLength-2)/2, std::round(floatToPixel(Axis::Vertical, x)), k_labelGraduationLength, 1);
+      graduation = KDRect(horizontalCoordinate-(k_labelGraduationLength-2)/2, std::round(floatToPixel(Axis::Vertical, x)), k_labelGraduationLength, 1);
     }
-    if (-step < x && x < step && shiftOrigin) {
-      origin = KDPoint(std::round(floatToPixel(Axis::Horizontal, 0.0f)) + k_labelMargin, std::round(floatToPixel(Axis::Vertical, 0.0f)) + k_labelMargin);
-    }
-    if (rect.intersects(KDRect(origin, KDText::stringSize(label(axis, i), KDText::FontSize::Small)))) {
-      ctx->blendString(label(axis, i), origin, KDText::FontSize::Small, KDColorBlack);
+    if (!graduationOnly) {
+      KDSize textSize = KDText::stringSize(label(axis, i), KDText::FontSize::Small);
+      KDPoint origin(std::round(floatToPixel(Axis::Horizontal, x)) - textSize.width()/2, verticalCoordinate + k_labelMargin);
+      if (axis == Axis::Vertical) {
+        origin = KDPoint(horizontalCoordinate + k_labelMargin, std::round(floatToPixel(Axis::Vertical, x)) - textSize.height()/2);
+      }
+      if (-step < x && x < step && shiftOrigin) {
+        origin = KDPoint(horizontalCoordinate + k_labelMargin, verticalCoordinate + k_labelMargin);
+      }
+      if (rect.intersects(KDRect(origin, KDText::stringSize(label(axis, i), KDText::FontSize::Small)))) {
+        ctx->blendString(label(axis, i), origin, KDText::FontSize::Small, KDColorBlack);
+      }
     }
     ctx->fillRect(graduation, KDColorBlack);
     i++;
@@ -389,10 +396,14 @@ void CurveView::drawHistogram(KDContext * ctx, KDRect rect, EvaluateModelWithPar
   float rectMaxUpperBound = firstBarAbscissa + (rectMaxBinNumber+1)*barWidth + barWidth;
   float pHighlightLowerBound = floatToPixel(Axis::Horizontal, highlightLowerBound);
   float pHighlightUpperBound = floatToPixel(Axis::Horizontal, highlightUpperBound);
-  for (float x = rectMinLowerBound; x < rectMaxUpperBound; x += barWidth) {
-    /* When |rectMinLowerBound| >> barWidth, rectMinLowerBound + barWidth = rectMinLowerBound.
+  float step = barWidth;
+  if ((rectMaxUpperBound-rectMinLowerBound)/step > resolution()) {
+    step = (rectMaxUpperBound-rectMinLowerBound)/resolution();
+  }
+  for (float x = rectMinLowerBound; x < rectMaxUpperBound; x += step) {
+    /* When |rectMinLowerBound| >> step, rectMinLowerBound + step = rectMinLowerBound.
      * In that case, quit the infinite loop. */
-    if (x == x-barWidth || x == x+barWidth) {
+    if (x == x-step || x == x+step) {
       return;
     }
     float centerX = fillBar ? x+barWidth/2.0f : x;
@@ -526,7 +537,7 @@ KDRect CurveView::cursorFrame() {
     KDCoordinate yCursorPixelPosition = std::round(floatToPixel(Axis::Vertical, m_curveViewCursor->y()));
     cursorFrame = KDRect(xCursorPixelPosition - (cursorSize.width()-1)/2, yCursorPixelPosition - (cursorSize.height()-1)/2, cursorSize.width(), cursorSize.height());
     if (cursorSize.height() == 0) {
-      KDCoordinate bannerHeight = m_bannerView != nullptr ? m_bannerView->minimalSizeForOptimalDisplay().height() : 0;
+      KDCoordinate bannerHeight = (m_bannerView != nullptr) ? m_bannerView->minimalSizeForOptimalDisplay().height() : 0;
       cursorFrame = KDRect(xCursorPixelPosition - (cursorSize.width()-1)/2, 0, cursorSize.width(),bounds().height()-bannerHeight);
     }
   }
@@ -544,13 +555,13 @@ KDRect CurveView::bannerFrame() {
 
 KDRect CurveView::okFrame() {
   KDRect okFrame = KDRectZero;
-  if (m_okView && m_mainViewSelected) {
+  if (m_okView && (m_mainViewSelected || m_forceOkDisplay)) {
     KDCoordinate bannerHeight = 0;
     if (m_bannerView != nullptr) {
       bannerHeight = m_bannerView->minimalSizeForOptimalDisplay().height();
     }
     KDSize okSize = m_okView->minimalSizeForOptimalDisplay();
-    okFrame = KDRect(bounds().width()- okSize.width()-k_okMargin, bounds().height()- bannerHeight-okSize.height()-k_okMargin, okSize);
+    okFrame = KDRect(bounds().width()- okSize.width()-k_okHorizontalMargin, bounds().height()- bannerHeight-okSize.height()-k_okVerticalMargin, okSize);
   }
   return okFrame;
 }

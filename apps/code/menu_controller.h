@@ -2,7 +2,6 @@
 #define CODE_MENU_CONTROLLER_H
 
 #include <escher.h>
-#include <apps/shared/new_function_cell.h>
 #include "console_controller.h"
 #include "editor_controller.h"
 #include "script_parameter_controller.h"
@@ -14,12 +13,8 @@ class ScriptParameterController;
 
 class MenuController : public ViewController, public TableViewDataSource, public SelectableTableViewDataSource, public SelectableTableViewDelegate, public TextFieldDelegate, public ButtonRowDelegate {
 public:
-  MenuController(Responder * parentResponder, ScriptStore * scriptStore, ButtonRowController * footer
-#if EPSILON_GETOPT
-      , bool m_lockOnConsole
-#endif
-      );
-  ConsoleController * consoleController() { return &m_consoleController; }
+  MenuController(Responder * parentResponder, ScriptStore * scriptStore, ButtonRowController * footer);
+  ConsoleController * consoleController();
   StackViewController * stackViewController();
   void willExitResponderChain(Responder * nextFirstResponder) override;
   void renameSelectedScript();
@@ -57,7 +52,7 @@ public:
   bool textFieldShouldFinishEditing(TextField * textField, Ion::Events::Event event) override;
   bool textFieldDidReceiveEvent(TextField * textField, Ion::Events::Event event) override;
   bool textFieldDidFinishEditing(TextField * textField, const char * text, Ion::Events::Event event) override;
-  bool textFieldDidAbortEditing(TextField * textField, const char * text) override;
+  bool textFieldDidAbortEditing(TextField * textField) override;
   bool textFieldDidHandleEvent(TextField * textField, bool returnValue, bool textHasChanged) override;
   Toolbox * toolboxForTextInput(TextInput * textInput) override { return nullptr; }
 
@@ -103,11 +98,10 @@ private:
    * constructor of an EvenOddEditableTextCell. */
   char m_draftTextBuffer[TextField::maxBufferSize()];
   EvenOddCellWithEllipsis m_scriptParameterCells[k_maxNumberOfDisplayableScriptCells];
-  Shared::NewFunctionCell m_addNewScriptCell;
+  EvenOddMessageTextCell m_addNewScriptCell;
   EvenOddCell m_emptyCell;
   Button m_consoleButton;
   SelectableTableView m_selectableTableView;
-  ConsoleController m_consoleController;
   ScriptParameterController m_scriptParameterController;
   EditorController m_editorController;
   bool m_reloadConsoleWhenBecomingFirstResponder;

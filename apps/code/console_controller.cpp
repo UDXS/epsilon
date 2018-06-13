@@ -133,7 +133,7 @@ void ConsoleController::didBecomeFirstResponder() {
 }
 
 bool ConsoleController::handleEvent(Ion::Events::Event event) {
-  if ((event == Ion::Events::Home || event == Ion::Events::Up) && inputRunLoopActive()) {
+  if (event == Ion::Events::Up && inputRunLoopActive()) {
     askInputRunLoopTermination();
     // We need to return true here because we want to actually exit from the
     // input run loop, which requires ending a dispatchEvent cycle.
@@ -153,8 +153,6 @@ bool ConsoleController::handleEvent(Ion::Events::Event event) {
       app()->setFirstResponder(&m_editCell);
       return m_editCell.insertText(text);
     }
-  } else if (event == Ion::Events::Copy) {
-    return copyCurrentLineToClipboard();
   } else if (event == Ion::Events::Clear) {
     m_selectableTableView.deselectTable();
     m_consoleStore.clear();
@@ -172,6 +170,10 @@ bool ConsoleController::handleEvent(Ion::Events::Event event) {
   }
 #if EPSILON_GETOPT
   if (m_locked && (event == Ion::Events::Home || event == Ion::Events::Back)) {
+    if (inputRunLoopActive()) {
+      askInputRunLoopTermination();
+      interrupt();
+    }
     return true;
   }
 #endif
@@ -279,12 +281,17 @@ bool ConsoleController::textFieldDidFinishEditing(TextField * textField, const c
   return true;
 }
 
-bool ConsoleController::textFieldDidAbortEditing(TextField * textField, const char * text) {
+bool ConsoleController::textFieldDidAbortEditing(TextField * textField) {
   if (inputRunLoopActive()) {
     askInputRunLoopTermination();
   } else {
 #if EPSILON_GETOPT
-    if (!m_locked) {
+    /* In order to lock the console controller, we disable poping controllers
+     * below the console controller included. The stack should only hold:
+     * - the menu controller
+     * - the console controller
+     * The depth of the stack controller must always be above or equal to 2. */
+    if (!m_locked || stackViewController()->depth() > 2) {
 #endif
       stackViewController()->pop();
 #if EPSILON_GETOPT
@@ -390,15 +397,6 @@ size_t ConsoleController::firstNewLineCharIndex(const char * text, size_t length
 
 StackViewController * ConsoleController::stackViewController() {
  return static_cast<StackViewController *>(parentResponder());
-}
-
-bool ConsoleController::copyCurrentLineToClipboard() {
-  int row = m_selectableTableView.selectedRow();
-  if (row < m_consoleStore.numberOfLines()) {
-    Clipboard::sharedClipboard()->store(m_consoleStore.lineAtIndex(row).text());
-    return true;
-  }
-  return false;
 }
 
 }

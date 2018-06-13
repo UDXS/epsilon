@@ -102,11 +102,11 @@ ExpressionLayout * Division::privateCreateLayout(PrintFloat::Mode floatDisplayMo
   assert(complexFormat != ComplexFormat::Default);
   const Expression * numerator = operand(0)->type() == Type::Parenthesis ? operand(0)->operand(0) : operand(0);
   const Expression * denominator = operand(1)->type() == Type::Parenthesis ? operand(1)->operand(0) : operand(1);
-  return new FractionLayout(numerator->createLayout(floatDisplayMode, complexFormat), denominator->createLayout(floatDisplayMode, complexFormat));
+  return new FractionLayout(numerator->createLayout(floatDisplayMode, complexFormat), denominator->createLayout(floatDisplayMode, complexFormat), false);
 }
 
 template<typename T> Matrix * Division::computeOnComplexAndMatrix(const Complex<T> * c, const Matrix * n) {
-  Matrix * inverse = n->createInverse<T>();
+  Matrix * inverse = n->createApproximateInverse<T>();
   if (inverse == nullptr) {
     return nullptr;
   }
@@ -119,7 +119,7 @@ template<typename T> Matrix * Division::computeOnMatrices(const Matrix * m, cons
   if (m->numberOfColumns() != n->numberOfColumns()) {
     return nullptr;
   }
-  Matrix * inverse = n->createInverse<T>();
+  Matrix * inverse = n->createApproximateInverse<T>();
   if (inverse == nullptr) {
     return nullptr;
   }

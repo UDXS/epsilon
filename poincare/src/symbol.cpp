@@ -1,22 +1,27 @@
 #include <poincare/symbol.h>
+
 #include <poincare/context.h>
 #include <poincare/complex.h>
 #include <poincare/division.h>
-#include <poincare/layout_engine.h>
+#include <poincare/multiplication.h>
 #include <poincare/parenthesis.h>
 #include <poincare/power.h>
-#include <poincare/multiplication.h>
-#include "layout/baseline_relative_layout.h"
-#include "layout/string_layout.h"
+
+#include <poincare/layout_engine.h>
+#include "layout/char_layout.h"
+#include "layout/horizontal_layout.h"
+#include "layout/vertical_offset_layout.h"
+
 #include <ion.h>
+#include <cmath>
+
 extern "C" {
 #include <assert.h>
 }
-#include <cmath>
 
 namespace Poincare {
 
-const char * Symbol::textForSpecialSymbols(char name) const {
+const char * Symbol::textForSpecialSymbols(char name) {
   switch (name) {
     case SpecialSymbols::Ans:
       return "ans";
@@ -48,12 +53,55 @@ const char * Symbol::textForSpecialSymbols(char name) const {
       return "M8";
     case SpecialSymbols::M9:
       return "M9";
+    case SpecialSymbols::V1:
+      return "V1";
+    case SpecialSymbols::N1:
+      return "N1";
+    case SpecialSymbols::V2:
+      return "V2";
+    case SpecialSymbols::N2:
+      return "N2";
+    case SpecialSymbols::V3:
+      return "V3";
+    case SpecialSymbols::N3:
+      return "N3";
+    case SpecialSymbols::X1:
+      return "X1";
+    case SpecialSymbols::Y1:
+      return "Y1";
+    case SpecialSymbols::X2:
+      return "X2";
+    case SpecialSymbols::Y2:
+      return "Y2";
+    case SpecialSymbols::X3:
+      return "X3";
+    case SpecialSymbols::Y3:
+      return "Y3";
     default:
       assert(false);
       return nullptr;
   }
 }
 
+int Symbol::getVariables(isVariableTest isVariable, char * variables) const {
+ size_t variablesLength = strlen(variables);
+ if (isVariable(m_name)) {
+   char * currentChar = variables;
+   while (*currentChar != 0) {
+     if (*currentChar == m_name) {
+       return variablesLength;
+     }
+     currentChar++;
+   }
+   if (variablesLength < k_maxNumberOfVariables) {
+     variables[variablesLength] = m_name;
+     variables[variablesLength+1] = 0;
+     return variablesLength+1;
+   }
+   return -1;
+ }
+ return variablesLength;
+}
 
 Symbol::SpecialSymbols Symbol::matrixSymbol(char index) {
   switch (index - '0') {
@@ -106,6 +154,16 @@ int Symbol::polynomialDegree(char symbol) const {
   if (m_name == symbol) {
     return 1;
   }
+  return 0;
+}
+
+int Symbol::privateGetPolynomialCoefficients(char symbolName, Expression * coefficients[]) const {
+  if (m_name == symbolName) {
+    coefficients[0] = new Rational(0);
+    coefficients[1] = new Rational(1);
+    return 1;
+  }
+  coefficients[0] = clone();
   return 0;
 }
 
@@ -190,25 +248,48 @@ ExpressionLayout * Symbol::privateCreateLayout(PrintFloat::Mode floatDisplayMode
   assert(floatDisplayMode != PrintFloat::Mode::Default);
   assert(complexFormat != ComplexFormat::Default);
   if (m_name == SpecialSymbols::Ans) {
-    return new StringLayout("ans", 3);
+    return LayoutEngine::createStringLayout("ans", 3);
   }
   if (m_name == SpecialSymbols::un) {
-    return new BaselineRelativeLayout(new StringLayout("u", 1), new StringLayout("n",1, KDText::FontSize::Small), BaselineRelativeLayout::Type::Subscript);
+    return new HorizontalLayout(
+        new CharLayout('u'),
+        new VerticalOffsetLayout(
+          new CharLayout('n', KDText::FontSize::Small),
+          VerticalOffsetLayout::Type::Subscript,
+          false),
+        false);
   }
   if (m_name == SpecialSymbols::un1) {
-    return new BaselineRelativeLayout(new StringLayout("u", 1), new StringLayout("n+1",3, KDText::FontSize::Small), BaselineRelativeLayout::Type::Subscript);
+    return new HorizontalLayout(
+      new CharLayout('u'),
+      new VerticalOffsetLayout(
+        LayoutEngine::createStringLayout("n+1", 3, KDText::FontSize::Small),
+        VerticalOffsetLayout::Type::Subscript,
+        false),
+      false);
   }
   if (m_name == SpecialSymbols::vn) {
-    return new BaselineRelativeLayout(new StringLayout("v", 1), new StringLayout("n",1, KDText::FontSize::Small), BaselineRelativeLayout::Type::Subscript);
+    return new HorizontalLayout(
+        new CharLayout('v'),
+        new VerticalOffsetLayout(
+          new CharLayout('n', KDText::FontSize::Small),
+          VerticalOffsetLayout::Type::Subscript,
+          false),
+        false);
   }
   if (m_name == SpecialSymbols::vn1) {
-    return new BaselineRelativeLayout(new StringLayout("v", 1), new StringLayout("n+1",3, KDText::FontSize::Small), BaselineRelativeLayout::Type::Subscript);
+    return new HorizontalLayout(
+      new CharLayout('v'),
+      new VerticalOffsetLayout(
+        LayoutEngine::createStringLayout("n+1", 3, KDText::FontSize::Small),
+        VerticalOffsetLayout::Type::Subscript,
+        false),
+      false);
   }
-  if (isMatrixSymbol()) {
-    const char mi[] = { 'M', (char)(m_name-(char)SpecialSymbols::M0+'0') };
-    return new StringLayout(mi, sizeof(mi));
+  if (isMatrixSymbol() || isSeriesSymbol(m_name) || isRegressionSymbol(m_name)) {
+    return LayoutEngine::createStringLayout(textForSpecialSymbols(m_name), 2);
   }
-  return new StringLayout(&m_name, 1);
+  return LayoutEngine::createStringLayout(&m_name, 1);
 }
 
 int Symbol::writeTextInBuffer(char * buffer, int bufferSize, int numberOfSignificantDigits) const {
@@ -237,6 +318,27 @@ bool Symbol::isMatrixSymbol() const {
 
 bool Symbol::isScalarSymbol() const {
   if (m_name >= 'A' && m_name <= 'Z') {
+    return true;
+  }
+  return false;
+}
+
+bool Symbol::isVariableSymbol(char c)  {
+  if (c >= 'a' && c <= 'z') {
+    return true;
+  }
+  return false;
+}
+
+bool Symbol::isSeriesSymbol(char c) {
+  if (c >= (char)SpecialSymbols::V1 && c <= (char)SpecialSymbols::N3) {
+    return true;
+  }
+  return false;
+}
+
+bool Symbol::isRegressionSymbol(char c) {
+  if (c >= (char)SpecialSymbols::X1 && c <= (char)SpecialSymbols::Y3) {
     return true;
   }
   return false;

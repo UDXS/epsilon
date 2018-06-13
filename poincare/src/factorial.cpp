@@ -1,10 +1,11 @@
 #include <poincare/factorial.h>
-#include "layout/string_layout.h"
+#include "layout/char_layout.h"
 #include "layout/horizontal_layout.h"
 #include <poincare/rational.h>
 #include <poincare/undefined.h>
 #include <poincare/symbol.h>
 #include <poincare/simplification_engine.h>
+#include <poincare/parenthesis.h>
 #include <ion.h>
 extern "C" {
 #include <assert.h>
@@ -65,6 +66,16 @@ Expression * Factorial::shallowReduce(Context& context, AngleUnit angleUnit) {
   return this;
 }
 
+Expression * Factorial::shallowBeautify(Context& context, AngleUnit angleUnit) {
+  // +(a,b)! ->(+(a,b))!
+  if (operand(0)->type() == Type::Addition || operand(0)->type() == Type::Multiplication || operand(0)->type() == Type::Power) {
+    const Expression * o[1] = {operand(0)};
+    Parenthesis * p = new Parenthesis(o, true);
+    replaceOperand(operand(0), p, true);
+  }
+  return this;
+}
+
 template<typename T>
 Complex<T> Factorial::computeOnComplex(const Complex<T> c, AngleUnit angleUnit) {
   T n = c.a();
@@ -84,10 +95,10 @@ Complex<T> Factorial::computeOnComplex(const Complex<T> c, AngleUnit angleUnit) 
 ExpressionLayout * Factorial::privateCreateLayout(PrintFloat::Mode floatDisplayMode, ComplexFormat complexFormat) const {
   assert(floatDisplayMode != PrintFloat::Mode::Default);
   assert(complexFormat != ComplexFormat::Default);
-  ExpressionLayout * childrenLayouts[2];
-  childrenLayouts[0] = operand(0)->createLayout(floatDisplayMode, complexFormat);
-  childrenLayouts[1] = new StringLayout("!", 1);
-  return new HorizontalLayout(childrenLayouts, 2);
+  HorizontalLayout * result = new HorizontalLayout();
+  result->addOrMergeChildAtIndex(operand(0)->createLayout(floatDisplayMode, complexFormat), 0, false);
+  result->addChildAtIndex(new CharLayout('!'), result->numberOfChildren());
+  return result;
 }
 
 int Factorial::writeTextInBuffer(char * buffer, int bufferSize, int numberOfSignificantDigits) const {
@@ -95,7 +106,16 @@ int Factorial::writeTextInBuffer(char * buffer, int bufferSize, int numberOfSign
     return -1;
   }
   buffer[bufferSize-1] = 0;
-  int numberOfChar = operand(0)->writeTextInBuffer(buffer, bufferSize, numberOfSignificantDigits);
+  int numberOfChar = 0;
+  if (operand(0)->needParenthesisWithParent(this)) {
+    buffer[numberOfChar++] = '(';
+    if (numberOfChar >= bufferSize-1) { return bufferSize-1; }
+  }
+  numberOfChar += operand(0)->writeTextInBuffer(buffer+numberOfChar, bufferSize-numberOfChar, numberOfSignificantDigits);
+  if (operand(0)->needParenthesisWithParent(this)) {
+    buffer[numberOfChar++] = ')';
+    if (numberOfChar >= bufferSize-1) { return bufferSize-1; }
+  }
   if (numberOfChar >= bufferSize-1) {
     return numberOfChar;
   }
